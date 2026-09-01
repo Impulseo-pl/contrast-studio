@@ -21,9 +21,42 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/styles.css?v=95a5a033">
+<link rel="stylesheet" href="assets/styles.css?v=cf31f925">
+<script>
+/* WEJSCIE NA STRONE - "ladowanie" znaku CONTRAST STUDIO (prosba Agaty 01.09.2026,
+   wzor: demo KONKRET Meble na wymiar, a tam Meble FRONT).
+   Skrypt siedzi w <head> BEZ defer, zeby strona nie mignela przed zaslona.
+   Zaslona w CSS jest domyslnie wylaczona (display:none) - wlacza ja dopiero ta
+   klasa, wiec przy wylaczonym JS wejscia po prostu nie ma i nic nie blokuje.
+   Gra RAZ na wizyte (sessionStorage); ?intro w adresie = zagraj ponownie. */
+(function(){
+  try{
+    var h = document.documentElement;
+    if (window.matchMedia && matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+    var znowu = location.search.indexOf('intro') > -1;
+    if (!znowu && sessionStorage.getItem('contrast-intro')) return;
+    sessionStorage.setItem('contrast-intro','1');
+    h.classList.add('intro-on');
+    var zdjete = false;
+    function koniec(){
+      if (zdjete) return; zdjete = true;
+      h.classList.add('intro-out');
+      try { document.dispatchEvent(new CustomEvent('intro:end')); } catch(e){}
+      setTimeout(function(){ h.classList.remove('intro-on','intro-out'); }, 800);
+    }
+    setTimeout(koniec, 1900);
+    /* twardy bezpiecznik: cokolwiek by nie padlo, po 3,8 s zaslony nie ma */
+    setTimeout(function(){ h.classList.remove('intro-on','intro-out'); }, 3800);
+    document.addEventListener('click', koniec);
+    window.addEventListener('wheel', koniec, {passive:true});
+    window.addEventListener('touchstart', koniec, {passive:true});
+    window.addEventListener('keydown', koniec);
+  }catch(e){}
+})();
+</script>
 </head>
 <body>
+<div id="intro" aria-hidden="true"></div>
 
 <header class="nav">
   <div class="wrap nav-inner">
@@ -38,6 +71,107 @@
     <button class="nav-toggle" aria-label="Menu"><span></span><span></span><span></span></button>
   </div>
 </header>
+<script>
+/* POMIAR ZNAKU DO WEJSCIA - celowo TU, tuz za </header>, a nie w main.js:
+   main.js rusza z konca strony okolo 300 ms pozniej, a przy budzecie ~1,9 s to
+   jest roznica miedzy "plynnie" a "ospale". Liczymy, ile brakuje nazwie firmy
+   do srodka okna i jak mocno ja powiekszyc - na sztywno sie nie da, bo zalezy
+   od szerokosci okna i dlugosci nazwy.
+   Dwa kroki, bo jeden nie wystarcza:
+   (1) UKLAD - offsetWidth/offsetLeft, a NIE getBoundingClientRect: klasa
+       .intro-on juz naklada transformacje, wiec rect zwrocilby stan po niej;
+   (2) KOREKTA - dopiero teraz czytamy realny prostokat i domykamy reszte bledu
+       (baseline w pasku, padding, cien liter). Bez tego znak stal 12 px za wysoko.
+   Start czeka na krój z Google Fonts (max 400 ms) - inaczej mierzymy zastepczy
+   font, a po podmianie napis zmienia szerokosc i ucieka ze srodka. */
+(function(){
+  try{
+    var h = document.documentElement;
+    if (!h.classList.contains('intro-on')) return;
+    var znak = document.querySelector('.nav .brand');
+    var nazwa = znak && znak.querySelector('.name');
+    if (!znak || !nazwa) return;
+
+    function zmierz(){
+      var pr = parseFloat(getComputedStyle(znak).paddingRight) || 0;
+      var w = znak.offsetWidth - pr, hh = znak.offsetHeight;
+      if (!w || !hh) return false;
+      var x = 0, y = 0, el = znak;
+      while (el) { x += el.offsetLeft; y += el.offsetTop; el = el.offsetParent; }
+      var W = window.innerWidth, H = window.innerHeight;
+      /* skale liczymy z DOCELOWEJ WIELKOSCI LITER, nie z szerokosci napisu -
+         inaczej dluga nazwa wychodzi mala, a krotka olbrzymia. Na koncu i tak
+         przycinamy tak, zeby znak zmiescil sie w oknie z marginesem. */
+      var fs = parseFloat(getComputedStyle(nazwa).fontSize) || 24;
+      var celLitery = Math.min(Math.max(W * 0.046, 26), 56);
+      var s = Math.max(1.15, celLitery / fs);
+      s = Math.min(s, (W * 0.9) / w);
+      znak.style.setProperty('--intro-dx', Math.round(W / 2 - (x + w / 2)) + 'px');
+      znak.style.setProperty('--intro-dy', Math.round(H / 2 - (y + hh / 2)) + 'px');
+      znak.style.setProperty('--intro-skala', s.toFixed(3));
+      return true;
+    }
+
+    /* domkniecie bledu na realnym prostokacie. `luz` = ile znak ma jeszcze stac
+       nizej: w stanie startowym jest to +16 px, po wejsciu juz 0. */
+    function koryguj(luz){
+      var r = znak.getBoundingClientRect();
+      if (!r.width || !r.height) return;
+      var dx = parseFloat(znak.style.getPropertyValue('--intro-dx')) || 0;
+      var dy = parseFloat(znak.style.getPropertyValue('--intro-dy')) || 0;
+      var bx = window.innerWidth / 2 - (r.left + r.width / 2);
+      var by = (window.innerHeight / 2 + luz) - (r.top + r.height / 2);
+      if (Math.abs(bx) < 0.5 && Math.abs(by) < 0.5) return;
+      znak.style.setProperty('--intro-dx', Math.round(dx + bx) + 'px');
+      znak.style.setProperty('--intro-dy', Math.round(dy + by) + 'px');
+    }
+
+    /* Korekte liczymy na NARYSOWANEJ klatce (requestAnimationFrame), nie zaraz po
+       ustawieniu zmiennych. Wymuszenie przeliczenia w tej samej linii kodu potrafi
+       oddac prostokat sprzed transformacji - na telefonie znak ladowal wtedy 55 px
+       za daleko w prawo. Dwa przebiegi domykaja reszte bledu. */
+    function ustaw(luz, gotowe){
+      znak.classList.add('znak-czeka');      /* bez przejscia - inaczej znak
+                                                przelecialby z rogu na srodek */
+      zmierz();
+      requestAnimationFrame(function(){
+        koryguj(luz);
+        requestAnimationFrame(function(){
+          koryguj(luz);
+          znak.classList.remove('znak-czeka');
+          if (gotowe) gotowe();
+        });
+      });
+    }
+
+    var poszlo = false;
+    function ruszaj(){
+      if (poszlo) return; poszlo = true;
+      ustaw(16, function(){
+        /* DWIE klatki - po jednej przegladarka sklei stan startowy z koncowym */
+        requestAnimationFrame(function(){
+          requestAnimationFrame(function(){ znak.classList.add('znak-wszedl'); });
+        });
+      });
+      /* bezpiecznik: gdyby klatki nie doszly (karta w tle), znak i tak sie pokaze */
+      setTimeout(function(){ znak.classList.add('znak-wszedl'); }, 900);
+    }
+
+    function przelicz(){
+      if (!h.classList.contains('intro-on') || h.classList.contains('intro-out')) return;
+      ustaw(znak.classList.contains('znak-wszedl') ? 0 : 16);
+    }
+
+    try {
+      if (document.fonts && document.fonts.ready) {
+        document.fonts.ready.then(function(){ if (poszlo) przelicz(); else ruszaj(); });
+      }
+    } catch(e){}
+    setTimeout(ruszaj, 400);          /* sufit czekania na krój */
+    window.addEventListener('resize', przelicz, {passive:true});
+  }catch(e){}
+})();
+</script>
 
 <main>
 <section class="hero-fach">

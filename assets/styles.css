@@ -1856,3 +1856,97 @@ footer{view-transition-name:mt-foot}
 .btn-accent{color:#fff}
 .nav .nav-links a.btn-accent{color:#fff}
 .btn-accent[data-accent-d],.cta-d .btn-accent{color:#fff}
+
+/* ============================================================
+   WEJŚCIE NA STRONĘ - „ŁADOWANIE" ZNAKU CONTRAST STUDIO
+   (prośba Agaty 01.09.2026: efekt ma wyglądać tak, jak u KONKRET
+   Meble na wymiar - demo Szymona z 21.08.2026, tam wzorcem było
+   Meble FRONT.) Choreografia jest ta sama:
+     jasna zasłona w kolorze strony -> nazwa firmy stoi na środku
+     okna, ciemna -> zasłona schodzi, a TEN SAM napis (nie kopia!)
+     zjeżdża na swoje miejsce w pasku i w locie przechodzi na biel.
+   Zasłona jest domyślnie WYŁĄCZONA (display:none) - włącza ją dopiero
+   skrypt w <head>. Bez JS-a albo przy jego błędzie nikt nie utknie
+   na pustym ekranie. Gra RAZ na wizytę (sessionStorage).
+   ============================================================ */
+
+/* ---------- 1) ZASŁONA ---------- */
+#intro{display:none}
+.intro-on #intro{
+  display:block;position:fixed;inset:0;z-index:200;
+  background:var(--paper);opacity:1;transition:opacity .85s ease;
+}
+.intro-on.intro-out #intro{opacity:0;pointer-events:none}
+.intro-on body{overflow:hidden}
+
+/* ---------- 2) ZNAK MUSI BYĆ NAD ZASŁONĄ ----------
+   Pasek dostaje wyższy z-index niż zasłona, ale reszta paska (menu,
+   przycisk, hamburger) ma na czas wejścia ustąpić - inaczej po jasnej
+   zasłonie pływa menu w kolorze przeznaczonym na ciemne zdjęcie.
+   Ciemna poświata pod paskiem (.nav::after) też musi zgasnąć, bo na
+   jasnej zasłonie wygląda jak brudna smuga. */
+.intro-on .nav{z-index:210}
+/* UWAGA: te trzy rzeczy chowamy na CALY czas wejscia (razem z odslona), nie tylko
+   do `intro-out`. Wracaja dopiero, gdy zaslony juz nie ma - inaczej przez pol
+   sekundy jasne menu i ciemna smuga paska siedza na gasnacej, jasnej zaslonie. */
+.intro-on .nav::after{opacity:0}
+.nav .nav-links,.nav .nav-toggle{transition:opacity .6s ease}
+.intro-on .nav .nav-links,
+.intro-on .nav .nav-toggle{opacity:0;pointer-events:none}
+
+/* ---------- 3) NAZWA FIRMY JAKO ZNAK ----------
+   Firma nie ma znaku graficznego, więc znakiem jest sama nazwa - dokładnie
+   jak w KONKRECIE. Przesunięcie (--intro-dx/--intro-dy) i powiększenie
+   (--intro-skala) liczy skrypt tuż za </header>: na sztywno się nie da,
+   bo zależą od szerokości okna i od tego, jak szeroko wyszła nazwa. */
+.nav .brand{
+  transform-origin:center center;
+  transition:transform 1.15s cubic-bezier(.16,.84,.44,1), opacity .8s ease;
+}
+.nav .brand.znak-czeka{transition:none}          /* pierwsze ustawienie bez animacji */
+.nav .brand .name,.nav .brand .sub{transition:color .5s ease .3s}
+
+.intro-on:not(.intro-out) .nav .brand{
+  transform:translate(var(--intro-dx,0px), calc(var(--intro-dy,0px) + 16px))
+            scale(calc(var(--intro-skala,1) * .97));
+  opacity:0;pointer-events:none;
+}
+.intro-on:not(.intro-out) .nav .brand.znak-wszedl{
+  transform:translate(var(--intro-dx,0px), var(--intro-dy,0px)) scale(var(--intro-skala,1));
+  opacity:1;
+}
+/* na jasnej zasłonie znak jest ciemny; przy jej zdejmowaniu przechodzi w biel -
+   dzięki temu czyta się jak JEDEN przedmiot, a nie dwa różne napisy */
+.intro-on:not(.intro-out) .nav .brand .name{color:var(--ink)}
+.intro-on:not(.intro-out) .nav .brand .sub{color:var(--accent-d)}
+
+/* ---------- 4) PIERWSZY EKRAN WCHODZI KASKADĄ PO ZDJĘCIU ZASŁONY ----------
+   Czasy przejść są CELOWO poza selektorem `.intro-on`: klasa znika 0,8 s po
+   starcie odsłony, a kaskada trwa dłużej - gdyby przejście siedziało pod tą
+   klasą, ostatnie elementy wskoczyłyby skokiem zamiast się wyłonić. */
+.hf-kicker,.hf-title,.hf-lead,.hf-phone,.hf-actions,.hf-trust{
+  transition:opacity .75s ease, transform .75s cubic-bezier(.16,.84,.44,1);
+}
+.hf-kicker{transition-delay:.28s}
+.hf-title{transition-delay:.38s}
+.hf-lead{transition-delay:.48s}
+.hf-phone{transition-delay:.58s}
+.hf-actions{transition-delay:.68s}
+.hf-trust{transition-delay:.78s}
+.intro-on:not(.intro-out) .hf-kicker,
+.intro-on:not(.intro-out) .hf-title,
+.intro-on:not(.intro-out) .hf-lead,
+.intro-on:not(.intro-out) .hf-phone,
+.intro-on:not(.intro-out) .hf-actions,
+.intro-on:not(.intro-out) .hf-trust{
+  opacity:0;transform:translateY(12px);transition-delay:0s;
+}
+
+/* ---------- 5) SZACUNEK DLA USTAWIEŃ UŻYTKOWNIKA ---------- */
+@media (prefers-reduced-motion:reduce){
+  .intro-on #intro{display:none}
+  .intro-on body{overflow:auto}
+  .nav .brand,.hf-kicker,.hf-title,.hf-lead,.hf-phone,.hf-actions,.hf-trust{
+    transition:none !important;transform:none !important;opacity:1 !important;
+  }
+}
